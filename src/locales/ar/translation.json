@@ -1666,7 +1666,9 @@
       "selfHosted": "مستضاف ذاتيًا",
       "selfHostedDesc": "اتصل بنقطة نهاية مستضافة ذاتيًا ومتوافقة مع OpenAI.",
       "enterprise": "للمؤسسات",
-      "enterpriseDesc": "استخدم AWS Bedrock أو Azure OpenAI أو Google Vertex."
+      "enterpriseDesc": "استخدم AWS Bedrock أو Azure OpenAI أو Google Vertex.",
+      "cli": "وكيل واجهة أوامر محلي",
+      "cliDesc": "توجيه الأوامر إلى Claude Code أو Codex على هذا الجهاز"
     },
     "prompt": {
       "title": "مطالبة المساعد",
@@ -1860,6 +1862,16 @@
       "askAssistant": "اسأل المساعد",
       "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
+    },
+    "cliAgent": {
+      "stage": {
+        "command": "جارٍ تشغيل أمر…",
+        "tool": "جارٍ استخدام {{name}}…",
+        "skill": "جارٍ استخدام المهارة {{name}}…",
+        "thinking": "جارٍ التفكير…"
+      },
+      "denialsTitle": "تم حظر بعض الأدوات",
+      "denialsBody": "لم يُسمح للوكيل باستخدام: {{tools}}"
     }
   },
   "calendar": {
@@ -4014,6 +4026,27 @@
       "upgradeCta": "الترقية الآن",
       "upgradedTitle": "تمت الترقية إلى Enterprise",
       "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
+    },
+    "cliAgent": {
+      "cliLabel": "واجهة الأوامر",
+      "notFound": "غير موجود في PATH",
+      "modelLabel": "النموذج",
+      "modelDefault": "الافتراضي في واجهة الأوامر",
+      "modelCustom": "مخصص…",
+      "permissionLabel": "وضع الأذونات",
+      "permissionAuto": "تلقائي (تحت الإشراف)",
+      "permissionAcceptEdits": "قبول التعديلات",
+      "permissionManual": "يدوي (موافقات واجهة الأوامر الافتراضية)",
+      "permissionBypass": "تجاوز كل الأذونات",
+      "permissionBypassWarning": "ستشغّل واجهة الأوامر أي أداة دون أن تسأل. استخدمه بحذر.",
+      "advanced": "متقدم",
+      "workingDirLabel": "مجلد العمل",
+      "workingDirPlaceholder": "المجلد الرئيسي افتراضيًا",
+      "timeoutLabel": "المهلة (بالثواني)",
+      "sessionLabel": "مدة إعادة استخدام الجلسة (بالدقائق)",
+      "sessionHint": "القيمة 0 تعطّل استئناف المحادثة",
+      "extraPromptLabel": "تعليمات إضافية",
+      "extraPromptPlaceholder": "تُضاف إلى موجّه النظام الخاص بالوكيل"
     }
   },
   "settings": {

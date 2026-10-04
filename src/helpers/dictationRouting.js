@@ -1,6 +1,10 @@
+import { DEFAULT_CLI_AGENT_PROVIDER, isCliAgentProvider } from "../config/cliAgentProviders";
+
 export function resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted }) {
   if (mode === "openwhispr") return isCloud;
   if (mode === "self-hosted") return isSelfHosted;
+  // A CLI agent authenticates itself and falls back to its own default model.
+  if (mode === "cli") return true;
 
   const hasModel = (model?.trim()?.length ?? 0) > 0;
   if (mode === "local") return hasModel;
@@ -94,6 +98,8 @@ export function resolveModeProvider({ isCloud, mode, provider }) {
     case "providers":
     case "enterprise":
       return provider?.trim() || undefined;
+    case "cli":
+      return isCliAgentProvider(provider) ? provider : DEFAULT_CLI_AGENT_PROVIDER;
     default:
       return undefined;
   }

@@ -1,0 +1,130 @@
+name: Fork release (Windows)
+
+# Builds this fork's unsigned Windows installer and publishes it, with the
+# latest.yml the in-app updater reads, as a GitHub release of this repository.
+# Upstream's release.yml needs signing and service secrets a fork does not have.
+# Actions are pinned to commit SHAs: the job holds a token that can write releases.
+#
+# The app keeps upstream's plain X.Y.Z version: the server's version checks and
+# policy headers refuse anything else. The fork build is "<version>-hf.<build>"
+# only where the updater and Windows see it: the release tag, latest.yml, the
+# installer's file name and its Installed apps name. package.json's forkBuild
+# lets the running app compare itself in the same form (src/helpers/forkBuild.js).
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Fork build number for the current upstream version (1, 2, …)"
+        required: true
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    # Every install updates itself from these releases, so only main is released.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run quality checks
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Build better-sqlite3 for the runner's node
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        run: npm test
+        env:
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          REQUIRE_DB_TESTS: "1"
+
+  build-windows:
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Name the fork build
+        shell: bash
+        env:
+          BUILD: ${{ inputs.build }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build must be a positive integer, got '$BUILD'"
+            exit 1
+          fi
+          FORK_VERSION="$(node -p "require('./package.json').version")-hf.$BUILD"
+          if gh release view "v$FORK_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::release v$FORK_VERSION already exists; use the next build number"
+            exit 1
+          fi
+          npm pkg set "forkBuild=$BUILD" --json
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          echo "FORK_VERSION=$FORK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
+
+      - name: Build the unsigned installer
+        shell: bash
+        run: >
+          npm run build:win --
+          --publish never
+          --config electron-builder.unsigned-win.json
+          "-c.nsis.artifactName=\${productName}-Setup-\${version}-hf.$BUILD.\${ext}"
+          "-c.nsis.uninstallDisplayName=\${productName} \${version}-hf.$BUILD"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL || 'https://auth.openwhispr.com' }}
+          VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL || 'https://api.openwhispr.com' }}
+
+      - name: Give latest.yml the fork version
+        shell: bash
+        run: |
+          sed -i "s/^version: .*/version: $FORK_VERSION/" dist/latest.yml
+          grep -q "^version: $FORK_VERSION$" dist/latest.yml
+          grep -q "OpenWhispr-Setup-.*-hf.$BUILD.exe" dist/latest.yml
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$FORK_VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenWhispr $FORK_VERSION" \
+            --notes "Unsigned Windows build of this fork at $GITHUB_SHA. Adds the CLI agent mode: the voice assistant runs through a locally installed, logged-in Claude Code." \
+            dist/OpenWhispr-Setup-*-hf.$BUILD.exe \
+            dist/OpenWhispr-Setup-*-hf.$BUILD.exe.blockmap \
+            dist/latest.yml

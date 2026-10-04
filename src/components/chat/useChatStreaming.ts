@@ -4,7 +4,10 @@ import ReasoningService, { type AgentStreamChunk } from "../../services/Reasonin
 import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
-import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
+import {
+  resolveChatStreamingInference,
+  resolveDictationAgentInference,
+} from "../../helpers/dictationAgentInference.js";
 import logger from "../../utils/logger";
 import {
   isAgentAllowed,
@@ -533,7 +536,24 @@ export function useChatStreaming({
           // carry only the model-facing output (the cloud path yields it).
           const toolDisplayTexts = new Map<string, string>();
 
-          if (isCloudAgent) {
+          if (llmMode === "cli") {
+            // The CLI resumes its own session, so it needs only this turn's text.
+            const lastUser = [...history].reverse().find((m) => m.role === "user");
+            const prompt = typeof lastUser?.content === "string" ? lastUser.content : userText;
+            const { config: cliConfig } = resolveDictationAgentInference(settings);
+            stream = ReasoningService.processTextStreamingCli(
+              prompt,
+              llmConfig.model,
+              { ...cliConfig, systemPrompt },
+              (stage) => {
+                setAgentState(stage.kind === "thinking" ? "thinking" : "tool-executing");
+                beginToolActivity(
+                  stage.name ?? stage.kind,
+                  t(`app.cliAgent.stage.${stage.kind}`, { name: stage.name })
+                );
+              }
+            );
+          } else if (isCloudAgent) {
             const executeToolCall = registry
               ? async (name: string, argsJson: string, toolCallId: string) => {
                   const tool = registry.get(name);

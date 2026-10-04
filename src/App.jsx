@@ -366,6 +366,19 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
+  // CLI agent denial toast
+  useEffect(() => {
+    const handler = (e) => {
+      toast({
+        title: t("app.cliAgent.denialsTitle"),
+        description: t("app.cliAgent.denialsBody", { tools: (e.detail || []).join(", ") }),
+        variant: "destructive",
+      });
+    };
+    window.addEventListener("cli-agent-denials", handler);
+    return () => window.removeEventListener("cli-agent-denials", handler);
+  }, [toast, t]);
+
   const isRecordingRef = useRef(isRecording);
 
   useLayoutEffect(() => {

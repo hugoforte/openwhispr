@@ -43,7 +43,8 @@ export interface MainWindowInputRegion {
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
-export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
+export type InferenceMode =
+  "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise" | "cli";
 
 /** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
 export interface LocalServerPrefs {
@@ -1951,6 +1952,21 @@ declare global {
         agentName: string | null,
         config: any
       ) => Promise<{ success: boolean; text?: string; error?: string; messageKey?: string }>;
+
+      // CLI agent (Claude Code / Codex)
+      processCliAgent: (opts: Record<string, unknown>) => Promise<{
+        success: boolean;
+        text?: string;
+        sessionId?: string;
+        permissionDenials?: unknown[];
+        error?: string;
+        errorCode?: string;
+      }>;
+      cancelCliAgent: () => Promise<{ success: boolean; error?: string; errorCode?: string }>;
+      checkCliAgent: (cli: string) => Promise<{ available: boolean; path?: string | null }>;
+      onCliAgentStage: (
+        callback: (label: import("../config/cliAgentProviders").CliAgentStage) => void
+      ) => () => void;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (

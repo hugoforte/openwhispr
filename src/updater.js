@@ -1,4 +1,5 @@
 const { autoUpdater } = require("electron-updater");
+const { forkUpdateVersion } = require("./helpers/forkBuild");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -31,9 +32,11 @@ class UpdateManager {
       return;
     }
 
+    // This fork publishes its own releases; upstream's would replace the fork's
+    // changes on the next update.
     autoUpdater.setFeedURL({
       provider: "github",
-      owner: "OpenWhispr",
+      owner: "hugoforte",
       repo: "openwhispr",
       private: false,
     });
@@ -66,6 +69,16 @@ class UpdateManager {
       }
 
       autoUpdater.channel = nativeArch === "arm64" ? "latest-arm64" : "latest-x64";
+    }
+
+    // The fork's releases carry "<app version>-hf.<build>" in latest.yml; compare
+    // against the same form, built with electron-updater's own SemVer class.
+    const { forkBuild } = require("../package.json");
+    if (forkBuild) {
+      const forkVersion = forkUpdateVersion(require("electron").app.getVersion(), forkBuild);
+      if (forkVersion) {
+        autoUpdater.currentVersion = new autoUpdater.currentVersion.constructor(forkVersion);
+      }
     }
 
     autoUpdater.autoDownload = false;
