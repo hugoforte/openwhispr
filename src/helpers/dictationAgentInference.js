@@ -33,6 +33,7 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
     };
   }
   const model = settings.dictationAgentModel?.trim() || "";
+  const isCliAgent = settings.dictationAgentMode === "cli";
   const isSelfHosted =
     settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
   const storedProvider = settings.dictationAgentProvider?.trim() || "";
@@ -68,6 +69,15 @@ export function resolveDictationAgentInference(settings, { isCloudAgent = false 
       customApiKey:
         isCustom || isSelfHosted ? settings.dictationAgentCustomApiKey || undefined : undefined,
       disableThinking: settings.dictationAgentDisableThinking,
+      ...(isCliAgent
+        ? {
+            cliPermissionMode: settings.cliAgentPermissionMode || "auto",
+            cliWorkingDir: settings.cliAgentWorkingDir || "",
+            cliTimeoutSeconds: Number(settings.cliAgentTimeoutSeconds) || 240,
+            cliSessionMinutes: Number(settings.cliAgentSessionMinutes ?? 30),
+            cliExtraPrompt: settings.cliAgentExtraPrompt || "",
+          }
+        : {}),
     },
   };
 }

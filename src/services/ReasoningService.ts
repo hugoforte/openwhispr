@@ -46,6 +46,8 @@ import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
+import { isCliAgentProvider, runCliAgent } from "./ai/inferenceProviders/cliAgent";
+import type { CliAgentStage } from "../config/cliAgentProviders";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -95,6 +97,7 @@ function resolveLlmDispatchMode(
   if (provider === "openwhispr") return "openwhispr";
   if (provider === "local") return "local";
   if (isEnterpriseProvider(provider)) return "enterprise";
+  if (isCliAgentProvider(provider)) return "cli";
   return "providers";
 }
 
@@ -497,7 +500,12 @@ class ReasoningService extends BaseReasoningService {
     if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
     assertReasoningAllowedByPolicy(providerId, resolveLlmDispatchMode(providerId, dispatchConfig));
 
-    if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
+    if (
+      !trimmedModel &&
+      providerId !== "openwhispr" &&
+      providerId !== "lan" &&
+      !isCliAgentProvider(providerId)
+    ) {
       throw new Error("No reasoning model selected");
     }
 
@@ -971,6 +979,38 @@ class ReasoningService extends BaseReasoningService {
       }
       throw error;
     } finally {
+      if (this.streamAbortController === abortController) {
+        this.streamAbortController = null;
+      }
+    }
+  }
+
+  /**
+   * The assistant panel's turn on a local CLI agent. The CLI keeps the
+   * conversation in its own resumable session and runs its own tools, so it
+   * gets only the newest message and answers in one chunk; `onStage` reports
+   * what it is doing meanwhile.
+   */
+  async *processTextStreamingCli(
+    prompt: string,
+    model: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    onStage?: (stage: CliAgentStage) => void
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    assertAgentSessionAllowedByPolicy(config.provider ?? "", "cli");
+    const abortController = new AbortController();
+    this.streamAbortController = abortController;
+    const cancelRun = () => void window.electronAPI?.cancelCliAgent?.();
+    abortController.signal.addEventListener("abort", cancelRun, { once: true });
+    const unsubscribe = onStage ? window.electronAPI?.onCliAgentStage?.(onStage) : undefined;
+    try {
+      const text = await runCliAgent({ prompt, model, config });
+      if (abortController.signal.aborted) return;
+      yield { type: "content", text };
+      yield { type: "done" };
+    } finally {
+      unsubscribe?.();
+      abortController.signal.removeEventListener("abort", cancelRun);
       if (this.streamAbortController === abortController) {
         this.streamAbortController = null;
       }

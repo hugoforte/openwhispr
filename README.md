@@ -27,6 +27,8 @@
 
 ---
 
+> **This is a fork.** [hugoforte/openwhispr](https://github.com/hugoforte/openwhispr) adds a **Local CLI Agent** mode to the voice assistant: spoken commands run through a locally installed, logged-in [Claude Code](https://claude.com/claude-code) (or Codex), so they use your subscription rather than an API key, and reach your MCP servers and skills. It builds on upstream [#1469](https://github.com/OpenWhispr/openwhispr/pull/1469). Windows builds are published on [this fork's releases](https://github.com/hugoforte/openwhispr/releases), and the app updates itself from there. Everything else is upstream's; report problems with the CLI agent mode here, and anything else [upstream](https://github.com/OpenWhispr/openwhispr).
+
 OpenWhispr turns your voice into text, notes, and actions from your desktop. Press a hotkey, speak, and your words appear at your cursor. Choose between fully private offline transcription with local speech-to-text models like Orukeet, Whisper, NVIDIA Parakeet, and Cohere Transcribe — where your audio never leaves your device — or cloud processing for speed. No data collection, no telemetry, fully open source.
 
 ## Download

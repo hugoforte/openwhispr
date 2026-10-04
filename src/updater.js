@@ -31,9 +31,11 @@ class UpdateManager {
       return;
     }
 
+    // This fork publishes its own releases; upstream's would replace the fork's
+    // changes on the next update.
     autoUpdater.setFeedURL({
       provider: "github",
-      owner: "OpenWhispr",
+      owner: "hugoforte",
       repo: "openwhispr",
       private: false,
     });

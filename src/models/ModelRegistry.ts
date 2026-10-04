@@ -3,6 +3,7 @@ import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
+import { isCliAgentProvider } from "../config/cliAgentProviders";
 
 export interface ModelDefinition {
   id: string;
@@ -268,6 +269,8 @@ export function isProviderValidForMode(provider: string, mode: InferenceMode): b
       return modelRegistry.getAllProviders().some((p) => p.id === provider);
     case "enterprise":
       return isEnterpriseProvider(provider);
+    case "cli":
+      return isCliAgentProvider(provider);
     default:
       return true;
   }

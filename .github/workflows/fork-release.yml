@@ -1,0 +1,114 @@
+name: Fork release (Windows)
+
+# Builds this fork's unsigned Windows installer and publishes it, with the
+# latest.yml the in-app updater reads, as a GitHub release of this repository.
+# Upstream's release.yml needs signing and service secrets a fork does not have.
+#
+# The version is upstream's package.json version plus "-hf.<build>", so a fork
+# build sorts after the upstream release it is based on and before the next one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Fork build number for the current upstream version (1, 2, …)"
+        required: true
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Run quality checks
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Build better-sqlite3 for the runner's node
+        run: npm rebuild better-sqlite3
+      - name: Run tests
+        run: npm test
+        env:
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          REQUIRE_DB_TESTS: "1"
+
+  build-windows:
+    needs: tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set the fork version
+        shell: bash
+        env:
+          BUILD: ${{ inputs.build }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::build must be a positive integer, got '$BUILD'"
+            exit 1
+          fi
+          VERSION="$(node -p "require('./package.json').version")-hf.$BUILD"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::release v$VERSION already exists; use the next build number"
+            exit 1
+          fi
+          npm version "$VERSION" --no-git-tag-version
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
+
+      - name: Build the unsigned installer
+        shell: bash
+        # Names the installer the way latest.yml refers to it.
+        run: >
+          npm run build:win --
+          --publish never
+          --config electron-builder.unsigned-win.json
+          '-c.nsis.artifactName=${productName}-Setup-${version}.${ext}'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VITE_AUTH_URL: https://auth.openwhispr.com
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenWhispr $VERSION" \
+            --notes "Unsigned Windows build of this fork at $GITHUB_SHA. Adds the CLI agent mode: the voice assistant runs through a locally installed, logged-in Claude Code." \
+            "dist/OpenWhispr-Setup-$VERSION.exe" \
+            "dist/OpenWhispr-Setup-$VERSION.exe.blockmap" \
+            dist/latest.yml

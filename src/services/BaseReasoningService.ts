@@ -32,6 +32,11 @@ export interface ReasoningConfig {
   requestId?: string;
   requiresAgent?: boolean;
   inferenceScope?: InferenceScope;
+  cliPermissionMode?: string;
+  cliWorkingDir?: string;
+  cliTimeoutSeconds?: number;
+  cliSessionMinutes?: number;
+  cliExtraPrompt?: string;
 }
 
 export abstract class BaseReasoningService {

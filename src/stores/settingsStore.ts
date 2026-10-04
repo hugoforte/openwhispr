@@ -998,6 +998,11 @@ export interface SettingsState
   dictationAgentVisionCloudMode: string;
   dictationAgentVisionCloudBaseUrl: string;
   dictationAgentVisionCustomApiKey: string;
+  cliAgentPermissionMode: string;
+  cliAgentWorkingDir: string;
+  cliAgentTimeoutSeconds: number;
+  cliAgentSessionMinutes: number;
+  cliAgentExtraPrompt: string;
 
   cleanupDisableThinking: boolean;
   dictationAgentDisableThinking: boolean;
@@ -1025,6 +1030,11 @@ export interface SettingsState
   setDictationAgentVisionCloudBaseUrl: (value: string) => void;
   setDictationAgentVisionCustomApiKey: (key: string) => void;
   setDictationAgentVisionDisableThinking: (value: boolean) => void;
+  setCliAgentPermissionMode: (v: string) => void;
+  setCliAgentWorkingDir: (v: string) => void;
+  setCliAgentTimeoutSeconds: (v: number) => void;
+  setCliAgentSessionMinutes: (v: number) => void;
+  setCliAgentExtraPrompt: (v: string) => void;
 
   setTranscriptionMode: (mode: InferenceMode) => void;
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
@@ -1918,7 +1928,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       v === "providers" ||
       v === "local" ||
       v === "self-hosted" ||
-      v === "enterprise"
+      v === "enterprise" ||
+      v === "cli"
     )
       return v;
     return "openwhispr" as InferenceMode;
@@ -1940,6 +1951,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentVisionCloudMode: readString("dictationAgentVisionCloudMode", "openwhispr"),
   dictationAgentVisionCloudBaseUrl: readString("dictationAgentVisionCloudBaseUrl", ""),
   dictationAgentVisionCustomApiKey: readString("dictationAgentVisionCustomApiKey", ""),
+  cliAgentPermissionMode: readString("cliAgentPermissionMode", "auto"),
+  cliAgentWorkingDir: readString("cliAgentWorkingDir", ""),
+  cliAgentTimeoutSeconds: Number(readString("cliAgentTimeoutSeconds", "")) || 240,
+  cliAgentSessionMinutes: (() => {
+    const raw = readString("cliAgentSessionMinutes", "");
+    const n = Number(raw);
+    return raw !== "" && Number.isFinite(n) && n >= 0 ? n : 30; // 0 is valid (disables resume)
+  })(),
+  cliAgentExtraPrompt: readString("cliAgentExtraPrompt", ""),
 
   cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
   dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
@@ -1982,6 +2002,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "dictationAgentVisionCustom",
     "custom"
   ),
+
+  setCliAgentPermissionMode: createStringSetter("cliAgentPermissionMode"),
+  setCliAgentWorkingDir: createStringSetter("cliAgentWorkingDir"),
+  setCliAgentTimeoutSeconds: createNumberSetter("cliAgentTimeoutSeconds"),
+  setCliAgentSessionMinutes: createNumberSetter("cliAgentSessionMinutes"),
+  setCliAgentExtraPrompt: createStringSetter("cliAgentExtraPrompt"),
 
   setCleanupDisableThinking: createBooleanSetter("cleanupDisableThinking"),
   setDictationAgentDisableThinking: createBooleanSetter("dictationAgentDisableThinking"),
