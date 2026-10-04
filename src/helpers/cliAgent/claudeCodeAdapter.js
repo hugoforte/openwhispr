@@ -15,13 +15,31 @@ class ClaudeCodeAdapter extends BaseCliAdapter {
     return "claude";
   }
 
+  // The prompt goes to stdin, never argv: `-p` takes no value, so a dictated
+  // prompt starting with "-" would otherwise be parsed as an option.
   buildArgs(request) {
-    const args = ["-p", request.prompt, "--output-format", "stream-json", "--verbose"];
+    const args = ["-p", "--output-format", "stream-json", "--verbose"];
     if (request.model) args.push("--model", request.model);
     args.push("--permission-mode", PERMISSION_MODE_MAP[request.permissionMode] || "acceptEdits");
     if (request.systemPrompt) args.push("--append-system-prompt", request.systemPrompt);
     if (request.resumeSessionId) args.push("--resume", request.resumeSessionId);
     return args;
+  }
+
+  buildStdin(request) {
+    return request.prompt;
+  }
+
+  // Claude Code names the credential it will bill in its init event; "none"
+  // is the subscription login. Anything else — a key from the environment,
+  // settings.json, an apiKeyHelper or a Console login — would bill per token.
+  subscriptionProblem(initEvent) {
+    if (initEvent.apiKeySource === "none") return null;
+    return (
+      `Claude Code would bill an API key (${initEvent.apiKeySource ?? "unknown source"}) ` +
+      "instead of your Claude subscription. Remove the key from Claude Code's settings and " +
+      "log in with your Claude account (claude, then /login)."
+    );
   }
 
   _stageForToolUse(block) {
@@ -35,8 +53,8 @@ class ClaudeCodeAdapter extends BaseCliAdapter {
   }
 
   mapEvent(json) {
-    if (json.type === "system" && json.subtype === "init" && json.session_id) {
-      return { type: "init", sessionId: json.session_id };
+    if (json.type === "system" && json.subtype === "init") {
+      return { type: "init", sessionId: json.session_id || null, apiKeySource: json.apiKeySource };
     }
     if (json.type === "assistant") {
       const blocks = json.message?.content || [];
@@ -47,10 +65,11 @@ class ClaudeCodeAdapter extends BaseCliAdapter {
     }
     if (json.type === "result") {
       const events = [];
-      if (json.session_id) events.push({ type: "init", sessionId: json.session_id });
+      if (json.session_id) events.push({ type: "sessionId", sessionId: json.session_id });
       events.push({
         type: "result",
-        text: json.result ?? "",
+        // An error result carries its reason in `errors`, not `result`.
+        text: json.result || (json.errors || []).join("; "),
         isError: !!json.is_error,
         permissionDenials: (json.permission_denials || []).map((d) => d.tool_name || String(d)),
       });
@@ -59,8 +78,8 @@ class ClaudeCodeAdapter extends BaseCliAdapter {
     return null;
   }
 
-  isUnknownSessionError(stderrText) {
-    return /no conversation found/i.test(stderrText);
+  isUnknownSessionError(text) {
+    return /no conversation found/i.test(text);
   }
 }
 

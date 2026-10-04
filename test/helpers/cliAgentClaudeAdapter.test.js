@@ -16,7 +16,6 @@ const req = (o = {}) => ({
 test("buildArgs: defaults", () => {
   assert.deepEqual(adapter.buildArgs(req()), [
     "-p",
-    "open a ticket",
     "--output-format",
     "stream-json",
     "--verbose",
@@ -25,6 +24,29 @@ test("buildArgs: defaults", () => {
     "--append-system-prompt",
     "SYS",
   ]);
+});
+
+test("the prompt is never on the command line, where a leading dash would read as an option", () => {
+  assert.ok(!adapter.buildArgs(req({ prompt: "--version" })).includes("--version"));
+});
+
+test("the prompt goes to the CLI on stdin", () => {
+  assert.equal(adapter.buildStdin(req({ prompt: "--version" })), "--version");
+});
+
+test("a run on the subscription login is allowed", () => {
+  assert.equal(adapter.subscriptionProblem({ type: "init", apiKeySource: "none" }), null);
+});
+
+test("a run that would bill an API key is refused, naming its source", () => {
+  assert.match(
+    adapter.subscriptionProblem({ type: "init", apiKeySource: "ANTHROPIC_API_KEY" }),
+    /API key \(ANTHROPIC_API_KEY\)/
+  );
+});
+
+test("a run whose credential the CLI does not name is refused", () => {
+  assert.ok(adapter.subscriptionProblem({ type: "init" }));
 });
 
 test("buildArgs: acceptEdits permission mode", () => {
@@ -51,11 +73,11 @@ test("buildArgs: no system prompt flag when empty", () => {
   assert.ok(!adapter.buildArgs(req({ systemPrompt: "" })).includes("--append-system-prompt"));
 });
 
-test("mapEvent: system init", () => {
-  assert.deepEqual(adapter.mapEvent({ type: "system", subtype: "init", session_id: "abc" }), {
-    type: "init",
-    sessionId: "abc",
-  });
+test("mapEvent: system init carries the session and the credential it bills", () => {
+  assert.deepEqual(
+    adapter.mapEvent({ type: "system", subtype: "init", session_id: "abc", apiKeySource: "none" }),
+    { type: "init", sessionId: "abc", apiKeySource: "none" }
+  );
 });
 
 test("mapEvent: assistant tool_use blocks become stages", () => {
@@ -89,7 +111,7 @@ test("mapEvent: result", () => {
       permission_denials: [{ tool_name: "Bash" }],
     }),
     [
-      { type: "init", sessionId: "abc" },
+      { type: "sessionId", sessionId: "abc" },
       { type: "result", text: "Done.", isError: false, permissionDenials: ["Bash"] },
     ]
   );
@@ -97,6 +119,19 @@ test("mapEvent: result", () => {
 
 test("mapEvent: irrelevant events map to null", () => {
   assert.equal(adapter.mapEvent({ type: "user" }), null);
+});
+
+// Recorded from Claude Code 2.1.90: `--resume <unknown id>` reports on stdout, not stderr.
+const UNKNOWN_SESSION_RESULT = {
+  type: "result",
+  subtype: "error_during_execution",
+  is_error: true,
+  errors: ["No conversation found with session ID: 0b5c2b52-6f3e-4c4e-9e07-1f0f6b0e5a11"],
+};
+
+test("an unknown-session result carries its reason as the error text", () => {
+  const [result] = adapter.mapEvent(UNKNOWN_SESSION_RESULT);
+  assert.equal(adapter.isUnknownSessionError(result.text), true);
 });
 
 test("isUnknownSessionError", () => {

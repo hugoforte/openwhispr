@@ -27,7 +27,7 @@ const DEFAULT_ADAPTER_FACTORIES = {
 function defaultResolveBinary(binaryName) {
   return new Promise((resolve) => {
     if (process.platform === "win32") {
-      execFile("where", [binaryName], (err, stdout) =>
+      execFile("where", [binaryName], { windowsHide: true }, (err, stdout) =>
         resolve(err ? null : pickWindowsExecutable(stdout, (f) => fs.readFileSync(f, "utf8")))
       );
       return;
@@ -37,6 +37,14 @@ function defaultResolveBinary(binaryName) {
       resolve(err ? null : stdout.trim() || null)
     );
   });
+}
+
+// Past 2^31-1 ms Node fires a timer after 1 ms, so a huge setting would fail
+// every run at once; an hour is longer than any spoken command needs.
+const MAX_TIMEOUT_SECONDS = 3600;
+function clampTimeoutSeconds(seconds) {
+  if (!(seconds > 0)) return 240;
+  return Math.min(seconds, MAX_TIMEOUT_SECONDS);
 }
 
 class CliAgentManager {
@@ -91,8 +99,8 @@ class CliAgentManager {
       model: opts.model || "",
       permissionMode: opts.permissionMode || "auto",
       cwd: opts.workingDir?.trim() || os.homedir(),
-      timeoutMs: (opts.timeoutSeconds > 0 ? opts.timeoutSeconds : 240) * 1000,
-      resumeSessionId: this.sessionStore.get(opts.cli, opts.sessionMinutes ?? 30),
+      timeoutMs: clampTimeoutSeconds(opts.timeoutSeconds) * 1000,
+      resumeSessionId: this.sessionStore.get(opts.cli, Math.max(0, opts.sessionMinutes ?? 30)),
     };
 
     try {
@@ -122,7 +130,8 @@ class CliAgentManager {
         request.resumeSessionId &&
         err instanceof CliAgentError &&
         err.code !== "cancelled" &&
-        adapter.isUnknownSessionError(err.stderr || "");
+        // Claude Code reports an unknown session in its result event, Codex on stderr.
+        adapter.isUnknownSessionError(`${err.message}\n${err.stderr || ""}`);
       if (!staleSession) throw err;
       debugLogger.debug("cli-agent: stale session, retrying without resume", { cli }, "cli-agent");
       this.sessionStore.clear(cli);

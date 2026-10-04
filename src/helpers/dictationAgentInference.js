@@ -113,7 +113,11 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
     resolved.customApiKey || (borrowsAgentEndpoint ? agent.customApiKey || "" : "");
 
   return {
+    // Never under a CLI agent: the override is a metered provider, and a CLI
+    // agent was chosen so commands run on the user's subscription. The
+    // screenshot is dropped instead.
     active:
+      settings.dictationAgentMode !== "cli" &&
       !!settings.useDictationAgentVisionModel &&
       chosen &&
       resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted: false }),

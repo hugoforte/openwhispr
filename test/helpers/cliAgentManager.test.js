@@ -187,3 +187,31 @@ test("run rejects with cli_not_found when binary missing", async () => {
   await assert.rejects(mgr.run(baseOpts), (e) => e.code === "cli_not_found");
   assert.deepEqual(await mgr.check("claude-code"), { available: false, path: null });
 });
+
+test("an unknown session Claude Code reports in its result, not stderr, is retried without resume", async () => {
+  const calls = [];
+  const mgr = makeManager({
+    calls,
+    script: [
+      async () => ({ text: "a", sessionId: "stale", permissionDenials: [] }),
+      async () => {
+        throw new CliAgentError("No conversation found with session ID: stale", "cli_error", "");
+      },
+      async () => ({ text: "recovered", sessionId: "s2", permissionDenials: [] }),
+    ],
+  });
+  await mgr.run(baseOpts);
+
+  assert.equal((await mgr.run(baseOpts)).text, "recovered");
+});
+
+test("a timeout past what a timer can hold is capped at an hour", async () => {
+  const calls = [];
+  const mgr = makeManager({
+    calls,
+    script: [async () => ({ text: "ok", sessionId: "s1", permissionDenials: [] })],
+  });
+  await mgr.run({ ...baseOpts, timeoutSeconds: 3_000_000 });
+
+  assert.equal(calls[0].request.timeoutMs, 3_600_000);
+});

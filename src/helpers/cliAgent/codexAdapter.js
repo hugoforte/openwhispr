@@ -34,7 +34,8 @@ class CodexAdapter extends BaseCliAdapter {
     const prompt = request.systemPrompt
       ? `${request.systemPrompt}\n\n${request.prompt}`
       : request.prompt;
-    args.push(prompt);
+    // "--" ends option parsing, so a prompt starting with "-" stays a prompt.
+    args.push("--", prompt);
     return args;
   }
 

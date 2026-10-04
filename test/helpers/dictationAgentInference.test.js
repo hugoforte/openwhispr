@@ -228,6 +228,24 @@ test("enterprise mode with a missing provider fails closed", async () => {
   assert.equal(result.config.provider, undefined);
 });
 
+test("a CLI agent never hands a screenshot to the metered vision override", async () => {
+  const { resolveDictationAgentVisionInference } = await load();
+
+  const result = resolveDictationAgentVisionInference({
+    ...baseSettings,
+    dictationAgentMode: "cli",
+    dictationAgentProvider: "claude-code",
+    useDictationAgentVisionModel: true,
+    dictationAgentVisionMode: "providers",
+    dictationAgentVisionProvider: "gemini",
+    dictationAgentVisionModel: "gemini-2.5-flash",
+    dictationAgentVisionCloudBaseUrl: "",
+    dictationAgentVisionCustomApiKey: "",
+  });
+
+  assert.equal(result.active, false);
+});
+
 test("vision override runs as the dictation agent scope and inherits key with endpoint", async () => {
   const { resolveDictationAgentVisionInference } = await load();
 

@@ -18,6 +18,7 @@ test("buildArgs: defaults — system prompt is prepended to the prompt", () => {
     "exec",
     "--json",
     "--full-auto",
+    "--",
     "SYS\n\nopen a ticket",
   ]);
 });
@@ -31,12 +32,14 @@ test("buildArgs: model, bypass, manual", () => {
       "-m",
       "gpt-5.2",
       "--dangerously-bypass-approvals-and-sandbox",
+      "--",
       "open a ticket",
     ]
   );
   assert.deepEqual(adapter.buildArgs(req({ permissionMode: "manual", systemPrompt: "" })), [
     "exec",
     "--json",
+    "--",
     "open a ticket",
   ]);
 });
@@ -48,6 +51,7 @@ test("buildArgs: resume inserts subcommand before flags", () => {
     "t1",
     "--json",
     "--full-auto",
+    "--",
     "open a ticket",
   ]);
 });

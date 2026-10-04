@@ -1040,6 +1040,8 @@ class ReasoningService extends BaseReasoningService {
     if (typeof window !== "undefined") {
       window.electronAPI?.cancelCloudReason?.();
       window.electronAPI?.cancelEnterpriseReasoning?.();
+      // A selection edit on a CLI agent keeps running its tools unless told to stop.
+      window.electronAPI?.cancelCliAgent?.();
     }
     this.cancelActiveStream();
   }

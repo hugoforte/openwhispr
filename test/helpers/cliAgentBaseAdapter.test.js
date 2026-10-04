@@ -113,27 +113,31 @@ test("rejects no_result when process exits without a result event", async () => 
   );
 });
 
-test("watchdog kills the child and rejects with timeout", async () => {
+test("watchdog kills the child's process tree and rejects with timeout", async () => {
   const adapter = new EchoAdapter();
   let child;
+  const kills = [];
   const promise = adapter.run(baseRequest({ timeoutMs: 10 }), {
     spawnFn: () => (child = new FakeChild()),
+    killFn: (proc, signal) => kills.push({ proc, signal }),
   });
   await assert.rejects(promise, (e) => e.code === "timeout");
-  assert.equal(child.killed, true);
+  assert.deepEqual(kills, [{ proc: child, signal: "SIGKILL" }]);
 });
 
-test("abort signal kills the child and rejects with cancelled", async () => {
+test("abort signal kills the child's process tree and rejects with cancelled", async () => {
   const adapter = new EchoAdapter();
   const controller = new AbortController();
   let child;
+  const kills = [];
   const promise = adapter.run(baseRequest(), {
     signal: controller.signal,
     spawnFn: () => (child = new FakeChild()),
+    killFn: (proc, signal) => kills.push({ proc, signal }),
   });
   controller.abort();
   await assert.rejects(promise, (e) => e.code === "cancelled");
-  assert.equal(child.killed, true);
+  assert.deepEqual(kills, [{ proc: child, signal: "SIGKILL" }]);
 });
 
 test("spawn error rejects with spawn code", async () => {
@@ -180,17 +184,24 @@ test("spawn env excludes secrets but keeps normal vars, and sets platform-correc
   }
 });
 
-test("watchdog kill falls back to direct kill when group signal fails", async () => {
-  const adapter = new EchoAdapter();
-  let child;
-  // A pid whose process group doesn't exist: process.kill(-pid) throws,
-  // exercising the fallback to child.kill().
-  const promise = adapter.run(baseRequest({ timeoutMs: 10 }), {
-    spawnFn: () => (child = new FakeChild({ pid: 2 ** 30 })),
-  });
-  await assert.rejects(promise, (e) => e.code === "timeout");
-  assert.equal(child.killed, true);
-});
+// Process groups are POSIX; Windows kills the tree with taskkill instead.
+test(
+  "watchdog kill falls back to direct kill when group signal fails",
+  {
+    skip: process.platform === "win32" && "process groups exist only on POSIX",
+  },
+  async () => {
+    const adapter = new EchoAdapter();
+    let child;
+    // A pid whose process group doesn't exist: process.kill(-pid) throws,
+    // exercising the fallback to child.kill().
+    const promise = adapter.run(baseRequest({ timeoutMs: 10 }), {
+      spawnFn: () => (child = new FakeChild({ pid: 2 ** 30 })),
+    });
+    await assert.rejects(promise, (e) => e.code === "timeout");
+    assert.equal(child.killed, true);
+  }
+);
 
 // Each of these would move a CLI off the user's subscription login: onto a
 // metered key, another endpoint, or a cloud provider's billing.
@@ -200,6 +211,7 @@ for (const key of [
   "ANTHROPIC_BASE_URL",
   "CLAUDE_CODE_USE_BEDROCK",
   "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CODE_USE_FOUNDRY",
 ]) {
   test(`spawn env drops ${key} inherited from the app's environment`, async () => {
     const original = process.env[key];
@@ -231,3 +243,116 @@ for (const key of [
     }
   });
 }
+
+test("a prompt the adapter sends on stdin reaches the CLI whole", async () => {
+  class StdinAdapter extends EchoAdapter {
+    buildStdin(request) {
+      return request.prompt;
+    }
+  }
+  let written = null;
+  let child;
+  const promise = new StdinAdapter().run(baseRequest({ prompt: "--version" }), {
+    spawnFn: () => {
+      child = new FakeChild();
+      child.stdin = { on() {}, end: (text) => (written = text) };
+      return child;
+    },
+  });
+  child.stdout.emit(
+    "data",
+    Buffer.from('{"evt":{"type":"result","text":"ok","isError":false,"permissionDenials":[]}}\n')
+  );
+  child.emit("close", 0);
+  await promise;
+
+  assert.equal(written, "--version");
+});
+
+test("a character split across two output chunks is decoded whole", async () => {
+  const adapter = new EchoAdapter();
+  let child;
+  const promise = adapter.run(baseRequest(), {
+    spawnFn: () => {
+      child = new FakeChild();
+      const { StringDecoder } = require("node:string_decoder");
+      for (const stream of [child.stdout, child.stderr]) {
+        const decoder = new StringDecoder("utf8");
+        const emit = stream.emit.bind(stream);
+        stream.setEncoding = () => {
+          stream.emit = (name, chunk) =>
+            name === "data" ? emit(name, decoder.write(chunk)) : emit(name, chunk);
+        };
+      }
+      return child;
+    },
+  });
+  const line = Buffer.from(
+    '{"evt":{"type":"result","text":"日本","isError":false,"permissionDenials":[]}}\n'
+  );
+  const cut = line.indexOf(Buffer.from("日")) + 1; // inside the first character
+  child.stdout.emit("data", line.subarray(0, cut));
+  child.stdout.emit("data", line.subarray(cut));
+  child.emit("close", 0);
+
+  assert.equal((await promise).text, "日本");
+});
+
+test("a run whose init event the adapter refuses is killed before it does anything", async () => {
+  class GuardedAdapter extends EchoAdapter {
+    subscriptionProblem() {
+      return "would bill an API key";
+    }
+  }
+  let child;
+  const kills = [];
+  const promise = new GuardedAdapter().run(baseRequest(), {
+    spawnFn: () => (child = new FakeChild()),
+    killFn: (proc) => kills.push(proc),
+  });
+  child.stdout.emit("data", Buffer.from('{"evt":{"type":"init","sessionId":"s1"}}\n'));
+
+  await assert.rejects(promise, (e) => e.code === "not_subscription");
+  assert.deepEqual(kills, [child]);
+});
+
+test("spawn env drops a secret whatever its case, as Windows reads it", async () => {
+  process.env.anthropic_api_key = "inherited";
+  try {
+    const adapter = new EchoAdapter();
+    let child;
+    let capturedOpts;
+    const promise = adapter.run(baseRequest(), {
+      spawnFn: (cmd, args, opts) => {
+        capturedOpts = opts;
+        child = new FakeChild();
+        return child;
+      },
+    });
+    child.stdout.emit(
+      "data",
+      Buffer.from(
+        '{"evt":{"type":"result","text":"done","isError":false,"permissionDenials":[]}}\n'
+      )
+    );
+    child.emit("close", 0);
+    await promise;
+
+    assert.equal(
+      Object.keys(capturedOpts.env).some((k) => k.toUpperCase() === "ANTHROPIC_API_KEY"),
+      false
+    );
+  } finally {
+    delete process.env.anthropic_api_key;
+  }
+});
+
+test("a CLI that exits without a result says why, from its stderr", async () => {
+  const adapter = new EchoAdapter();
+  let child;
+  const promise = adapter.run(baseRequest(), { spawnFn: () => (child = new FakeChild()) });
+  child.stderr.emit("data", Buffer.from("Invalid API key\n"));
+  child.emit("close", 1);
+
+  await assert.rejects(promise, /Invalid API key/);
+});

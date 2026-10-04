@@ -103,3 +103,17 @@ test("a failed CLI run surfaces its error to the panel", async (t) => {
     /claude was not found on PATH/
   );
 });
+
+test("cancelling a dictation stops a CLI agent run too", async (t) => {
+  let cancelled = false;
+  const reasoningService = await loadReasoningService(t, "openwhispr-cli-cancel-all-", {
+    cancelCliAgent: async () => {
+      cancelled = true;
+      return { success: true };
+    },
+  });
+
+  reasoningService.cancelAllRequests();
+
+  assert.equal(cancelled, true);
+});

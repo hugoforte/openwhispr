@@ -657,6 +657,7 @@ function registerSidecars() {
   sidecarRegistry.register("llama", () => modelManager.stopServer());
   const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
   sidecarRegistry.register("onnx", () => onnxWorkerClient.stop());
+  sidecarRegistry.register("cli-agent", () => ipcHandlers?.stopCliAgent());
 }
 
 // Phase 2: Non-critical setup after windows are visible

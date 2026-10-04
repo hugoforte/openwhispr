@@ -1292,6 +1292,12 @@ class IPCHandlers {
     return !!modelName;
   }
 
+  // Stops a CLI agent run still in flight, so quitting the app never leaves it
+  // running tools with no UI.
+  stopCliAgent() {
+    this.cliAgentManager?.cancel();
+  }
+
   _getCliAgentManager() {
     if (!this.cliAgentManager) {
       this.cliAgentManager = new CliAgentManager({
@@ -5446,6 +5452,13 @@ class IPCHandlers {
         const result = await this._getCliAgentManager().run(opts);
         return { success: true, ...result };
       } catch (error) {
+        if (error.code !== "cancelled") {
+          debugLogger.warn(
+            "cli-agent run failed",
+            { cli: opts?.cli, code: error.code, error: error.message },
+            "cli-agent"
+          );
+        }
         return { success: false, error: error.message, errorCode: error.code || "unknown" };
       }
     });
@@ -5461,6 +5474,7 @@ class IPCHandlers {
       try {
         return await this._getCliAgentManager().check(cli);
       } catch (error) {
+        debugLogger.warn("cli-agent check failed", { cli, error: error.message }, "cli-agent");
         return { available: false, path: null };
       }
     });
