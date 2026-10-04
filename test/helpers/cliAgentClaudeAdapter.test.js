@@ -19,11 +19,18 @@ test("buildArgs: defaults", () => {
     "--output-format",
     "stream-json",
     "--verbose",
+    "--settings",
+    '{"disableAllHooks":true}',
     "--permission-mode",
     "auto",
     "--append-system-prompt",
     "SYS",
   ]);
+});
+
+test("a voice run skips the user's Claude Code hooks, which cost seconds at start and exit", () => {
+  const args = adapter.buildArgs(req());
+  assert.deepEqual(JSON.parse(args[args.indexOf("--settings") + 1]), { disableAllHooks: true });
 });
 
 test("the prompt is never on the command line, where a leading dash would read as an option", () => {
