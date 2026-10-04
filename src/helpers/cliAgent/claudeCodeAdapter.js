@@ -17,8 +17,12 @@ class ClaudeCodeAdapter extends BaseCliAdapter {
 
   // The prompt goes to stdin, never argv: `-p` takes no value, so a dictated
   // prompt starting with "-" would otherwise be parsed as an option.
+  // The user's hooks (session start/end plugins and the like) are for their
+  // coding sessions and add seconds to every spoken command, so a voice run
+  // turns them off. `--bare` would too, but it ignores the subscription login.
   buildArgs(request) {
     const args = ["-p", "--output-format", "stream-json", "--verbose"];
+    args.push("--settings", JSON.stringify({ disableAllHooks: true }));
     if (request.model) args.push("--model", request.model);
     args.push("--permission-mode", PERMISSION_MODE_MAP[request.permissionMode] || "acceptEdits");
     if (request.systemPrompt) args.push("--append-system-prompt", request.systemPrompt);
