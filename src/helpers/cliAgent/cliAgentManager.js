@@ -92,6 +92,9 @@ class CliAgentManager {
     const systemPrompt = [opts.systemPrompt, CLI_CHANNEL_PROMPT, opts.extraPrompt]
       .filter((s) => s && s.trim())
       .join("\n\n");
+    // A window of 0 is a one-off run: it must not take over the session the
+    // panel's conversation resumes.
+    const sessionMinutes = Math.max(0, opts.sessionMinutes ?? 30);
     const baseRequest = {
       commandPath,
       prompt: opts.prompt,
@@ -100,14 +103,16 @@ class CliAgentManager {
       permissionMode: opts.permissionMode || "auto",
       cwd: opts.workingDir?.trim() || os.homedir(),
       timeoutMs: clampTimeoutSeconds(opts.timeoutSeconds) * 1000,
-      resumeSessionId: this.sessionStore.get(opts.cli, Math.max(0, opts.sessionMinutes ?? 30)),
+      resumeSessionId: this.sessionStore.get(opts.cli, sessionMinutes),
     };
 
     try {
       // Simple prompts may produce no tool events at all — show something
       // from the moment the CLI starts.
       this.sendStage({ kind: "thinking" });
-      return await this._attempt(opts.cli, baseRequest, controller.signal, true);
+      const result = await this._attempt(opts.cli, baseRequest, controller.signal, true);
+      if (result.sessionId && sessionMinutes > 0) this.sessionStore.set(opts.cli, result.sessionId);
+      return result;
     } finally {
       if (this._current?.controller === controller) this._current = null;
     }
@@ -116,14 +121,12 @@ class CliAgentManager {
   async _attempt(cli, request, signal, allowSessionRetry) {
     const adapter = this.adapterFactories[cli]();
     try {
-      const result = await adapter.run(request, {
+      return await adapter.run(request, {
         signal,
         onEvent: (evt) => {
           if (evt.type === "stage") this.sendStage(evt.label);
         },
       });
-      if (result.sessionId) this.sessionStore.set(cli, result.sessionId);
-      return result;
     } catch (err) {
       const staleSession =
         allowSessionRetry &&
