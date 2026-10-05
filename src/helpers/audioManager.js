@@ -2839,6 +2839,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       contextSize: Math.max(config?.contextSize || 0, 16384),
       temperature: config?.temperature ?? 0.2,
       requireCompleteOutput: true,
+      // A resumed CLI session keeps the instructions it started with and never
+      // learns this edit's completion marker.
+      cliSessionMinutes: 0,
     };
     const completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
     selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(

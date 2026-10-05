@@ -111,6 +111,23 @@ test("second run reuses the stored session id", async () => {
   assert.equal(calls[1].request.resumeSessionId, "s1");
 });
 
+test("a run with session reuse off neither resumes nor replaces the stored session", async () => {
+  const calls = [];
+  const mgr = makeManager({
+    calls,
+    script: [
+      async () => ({ text: "panel", sessionId: "s1", permissionDenials: [] }),
+      async () => ({ text: "edit", sessionId: "s2", permissionDenials: [] }),
+      async () => ({ text: "panel again", sessionId: "s1", permissionDenials: [] }),
+    ],
+  });
+  await mgr.run(baseOpts);
+  await mgr.run({ ...baseOpts, sessionMinutes: 0 });
+  await mgr.run(baseOpts);
+  assert.equal(calls[1].request.resumeSessionId, null);
+  assert.equal(calls[2].request.resumeSessionId, "s1");
+});
+
 test("unknown-session failure clears the session and retries exactly once without resume", async () => {
   const calls = [];
   const mgr = makeManager({

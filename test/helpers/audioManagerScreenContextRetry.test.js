@@ -102,6 +102,35 @@ test("a selection edit survives a rejected screenshot via the text-only retry", 
   );
 });
 
+// A resumed CLI session keeps the instructions it started with, so a selection
+// edit there never learns its completion marker and is always rejected.
+test("a selection edit asks a CLI agent for a fresh session", async (t) => {
+  const { window, setProcessText, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sc-cli-session-test-",
+    settingsKey: "__scCliSessionSettings",
+    reasoningKey: "__scCliSessionProcessText",
+  });
+
+  window.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    text: "selected body",
+    sessionId: "s1",
+  });
+  const configs = [];
+  setProcessText(async (text, model, agentName, config) => {
+    configs.push(config);
+    return `shorter text${config.systemPrompt.match(MARKER_RE)?.[0] ?? ""}`;
+  });
+
+  await createManager({ onError: () => {} }).processAgentCommand("make it shorter", "", "Agent", {
+    systemPrompt: "BASE PROMPT",
+    cliSessionMinutes: 30,
+    selectionEditReachable: true,
+  });
+
+  assert.equal(configs[0].cliSessionMinutes, 0);
+});
+
 test("the text-only retry swaps in the pre-built prompt verbatim", async (t) => {
   const { setProcessText, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-sc-retry-direct-test-",
