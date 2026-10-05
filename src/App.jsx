@@ -35,6 +35,7 @@ import {
   resolveAgentModeActive,
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
+  resolveVoicePillListening,
   resolveVoiceHorizontalDirection,
   resolvePillVisualSuppression,
   resolveVoicePanelCorePresentation,
@@ -298,28 +299,33 @@ export default function App() {
   const voicePillIsProcessing = (isProcessing || isStopping) && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording: voicePillIsRecording,
-    // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
-    // isPreparing out of the thinking state leaves the press on the pulsing
-    // "processing" mic-state pill instead of lighting the glow at hotkey time.
+    // Mic warm-up is the start of listening, not work on a transcript: the
+    // press runs the listening entrance below, so isPreparing stays out of the
+    // thinking state rather than lighting the glow at hotkey time.
     isProcessing: voicePillIsProcessing,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
-  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsRecording, {
+  const voicePillIsListening = resolveVoicePillListening({
+    isRecording,
+    isPreparing,
+    ownsActivity: voicePillOwnsActivity,
+  });
+  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsListening, {
     afterAssistantFooterHandoff: assistant.open,
   });
   const listeningEntrance = resolveListeningEntrancePresentation({
-    isRecording: voicePillIsRecording,
+    isRecording: voicePillIsListening,
     phase: listeningEntrancePhase,
   });
-  const isCompactPill = voicePillIsRecording
+  const isCompactPill = voicePillIsListening
     ? listeningEntrance.compactPill
     : voiceActivity.compactPill;
   // BASE and RECORDING resolve to the same native box (windowConfig.js), so
   // recording edges never call setBounds — resizing the transparent window
   // always kicks a compositor frame. This flag still feeds the size ladder so
   // a menu opening over the compact pill resolves to EXPANDED geometry.
-  const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
+  const windowFitsCompactPill = voicePillIsListening || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive, panelReturnResizeActive } = useMainWindowSizeOwner({
     requestMainWindowSize,

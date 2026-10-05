@@ -27,6 +27,7 @@ export default class FakeAudioManager {
   setTranslationRequested() {}
   startRecording() {
     globalThis.__forceStopStarts += 1;
+    globalThis.__forceStopEvents.push("mic open");
     return Promise.resolve(true);
   }
   complete(result) {
@@ -63,6 +64,11 @@ export const usePolicyStore = {
   getState: () => ({ status: "unmanaged" }),
   subscribe: () => () => {},
 };
+`;
+
+const DICTATION_CUES_SOURCE = `
+export const playStartCue = () => globalThis.__forceStopEvents.push("start cue");
+export const playStopCue = () => globalThis.__forceStopEvents.push("stop cue");
 `;
 
 const LOGGER_SOURCE = `
@@ -149,6 +155,7 @@ async function mountHarness(
   globalThis.__forceStopPastes = [];
   globalThis.__forceStopPasteOutcome = pasteOutcome;
   globalThis.__forceStopStarts = 0;
+  globalThis.__forceStopEvents = [];
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-audio-recording-force-stop-",
@@ -157,6 +164,7 @@ async function mountHarness(
       "/helpers/audioManager": FAKE_AUDIO_MANAGER_SOURCE,
       "/stores/settingsStore": SETTINGS_STORE_SOURCE,
       "/stores/policyStore": POLICY_STORE_SOURCE,
+      "/utils/dictationCues": DICTATION_CUES_SOURCE,
       "/utils/logger": LOGGER_SOURCE,
       "react-i18next": TRANSLATION_SOURCE,
     },
@@ -188,6 +196,7 @@ async function mountHarness(
     dismissals,
     previewHides: () => previewHides,
     recordingStarts: () => globalThis.__forceStopStarts,
+    events: globalThis.__forceStopEvents,
     setRecording: async (isRecording) => {
       await React.act(async () =>
         globalThis.__forceStopAudioManager.callbacks.onStateChange({
@@ -475,6 +484,16 @@ test("a Retry that lands after a newer pill leaves that pill alone", async (t) =
     dismissalsBefore,
     "the stale Retry must not close the newer pill"
   );
+});
+
+// The cue tells the user to speak; the prepared capture already keeps speech
+// from the press, so the cue must not wait for the microphone to open.
+test("the start cue plays before the microphone opens", async (t) => {
+  const harness = await mountHarness(t);
+
+  await harness.startRecording();
+
+  assert.deepEqual(harness.events, ["start cue", "mic open"]);
 });
 
 test("an ordinary dictation still pastes", async (t) => {

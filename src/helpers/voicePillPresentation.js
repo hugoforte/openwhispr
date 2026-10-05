@@ -19,9 +19,9 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
 export const VOICE_PILL_CANCEL = Object.freeze({ size: 28, gap: 8 });
 
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  // The floating pill shows the thinking circle while the mic opens, so once
-  // recording starts it expands on the next frame: a hold here would only
-  // delay the moment the pill reads as listening.
+  // The entrance starts at the press (resolveVoicePillListening) and the pill
+  // expands on the next frame: a hold here would only delay the moment it
+  // reads as listening.
   thinkingMs: 0,
   // A recording that starts under the open assistant panel first hands the
   // footer from final actions back to the pill (actions retreat + pill
@@ -183,6 +183,16 @@ export function getListeningEntranceTimeline({
     settleAtMs,
     waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };
+}
+
+/**
+ * The pill reads as listening from the press, while the microphone is still
+ * opening: the prepared capture records from its first live frame, so speech
+ * after the press is kept, and waiting for the open would hide that by about
+ * half a second. The bars rest until the first level arrives.
+ */
+export function resolveVoicePillListening({ isRecording, isPreparing, ownsActivity }) {
+  return (isRecording || isPreparing) && ownsActivity;
 }
 
 /**

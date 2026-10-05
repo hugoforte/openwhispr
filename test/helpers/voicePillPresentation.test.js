@@ -334,10 +334,37 @@ test("listening entrance timers preserve the visual order", async () => {
   );
 });
 
-test("the floating pill starts expanding the moment recording starts", async () => {
+test("the floating pill starts expanding the moment listening starts", async () => {
   const { getListeningEntranceTimeline } = await load();
 
   assert.equal(getListeningEntranceTimeline().expandAtMs, 0);
+});
+
+test("the pill listens from the press, while the microphone is still opening", async () => {
+  const { resolveVoicePillListening } = await load();
+
+  assert.equal(
+    resolveVoicePillListening({ isRecording: false, isPreparing: true, ownsActivity: true }),
+    true
+  );
+});
+
+test("the pill stays listening when the opened microphone starts recording", async () => {
+  const { resolveVoicePillListening } = await load();
+
+  assert.equal(
+    resolveVoicePillListening({ isRecording: true, isPreparing: false, ownsActivity: true }),
+    true
+  );
+});
+
+test("a press the companion pill owns leaves the footer pill at rest", async () => {
+  const { resolveVoicePillListening } = await load();
+
+  assert.equal(
+    resolveVoicePillListening({ isRecording: false, isPreparing: true, ownsActivity: false }),
+    false
+  );
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {

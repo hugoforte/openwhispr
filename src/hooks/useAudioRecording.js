@@ -236,6 +236,11 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
+        // The cue says the dictation began, so it plays now rather than after
+        // the microphone opens: the prepared capture keeps speech from the
+        // press, and a cue half a second late tells the user to wait for it.
+        void playStartCue();
+
         const startCalledAt = performance.now();
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
@@ -282,7 +287,6 @@ export const useAudioRecording = (toast, options = {}) => {
             window.electronAPI?.pauseMediaPlayback?.();
           }
           window.electronAPI?.registerCancelHotkey?.("Escape");
-          void playStartCue();
         }
 
         return didStart;
