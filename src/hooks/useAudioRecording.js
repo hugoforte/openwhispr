@@ -134,6 +134,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (startLockRef.current) return false;
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
+      const startRequestedAt = performance.now();
       stopRequestedDuringStartRef.current = false;
       pushForceStoppedRef.current = false;
       let recordingStarted = false;
@@ -162,6 +163,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
         await waitForVisualFrames();
+        const framesShownAt = performance.now();
         if (preparationGeneration !== preparationGenerationRef.current) return false;
 
         // Start acquisition only after the compact thinking frame has reached
@@ -173,11 +175,11 @@ export const useAudioRecording = (toast, options = {}) => {
         // still the user's actual editing target here. Refresh it for recordings
         // started from the panel itself as well as from global hotkeys; otherwise
         // paste can reactivate a stale target from the preceding dictation.
-        try {
-          await window.electronAPI.captureDictationTarget?.();
-        } catch (error) {
+        // Not awaited: the probe spawns a helper process, and the paste path
+        // waits out an in-flight probe itself, so recording need not.
+        window.electronAPI.captureDictationTarget?.()?.catch((error) => {
           logger.warn("Failed to refresh dictation target", { error: error?.message });
-        }
+        });
 
         demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
@@ -234,10 +236,24 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
+        const startCalledAt = performance.now();
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
+        // From the start request to recording; the hotkey press reaches the
+        // renderer a few milliseconds before startRequestedAt.
+        logger.info(
+          "Dictation start timing",
+          {
+            didStart,
+            framesMs: Math.round(framesShownAt - startRequestedAt),
+            beforeStartMs: Math.round(startCalledAt - framesShownAt),
+            startMs: Math.round(performance.now() - startCalledAt),
+            totalMs: Math.round(performance.now() - startRequestedAt),
+          },
+          "audio"
+        );
         if (didStart) {
           dictationErrorGenerationRef.current += 1;
           dismissDictationError?.();

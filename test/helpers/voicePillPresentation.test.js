@@ -322,7 +322,6 @@ test("listening entrance timers preserve the visual order", async () => {
 
   for (const afterAssistantFooterHandoff of [false, true]) {
     const timeline = getListeningEntranceTimeline({ afterAssistantFooterHandoff });
-    assert.ok(timeline.expandAtMs > 0);
     assert.ok(timeline.settleAtMs > timeline.expandAtMs);
     assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
   }
@@ -333,6 +332,12 @@ test("listening entrance timers preserve the visual order", async () => {
     getListeningEntranceTimeline().expandAtMs <
       getListeningEntranceTimeline({ afterAssistantFooterHandoff: true }).expandAtMs
   );
+});
+
+test("the floating pill starts expanding the moment recording starts", async () => {
+  const { getListeningEntranceTimeline } = await load();
+
+  assert.equal(getListeningEntranceTimeline().expandAtMs, 0);
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {

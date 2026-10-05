@@ -19,20 +19,19 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
 export const VOICE_PILL_CANCEL = Object.freeze({ size: 28, gap: 8 });
 
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  // A short hold that reads as an acknowledged press before the control
-  // changes shape. It was 420ms when it also had to hide the native window
-  // grow; BASE and RECORDING now share one box (windowConfig.js), so the
-  // floating pill's hold is purely the design beat.
-  thinkingMs: 260,
+  // The floating pill shows the thinking circle while the mic opens, so once
+  // recording starts it expands on the next frame: a hold here would only
+  // delay the moment the pill reads as listening.
+  thinkingMs: 0,
   // A recording that starts under the open assistant panel first hands the
   // footer from final actions back to the pill (actions retreat + pill
   // entrance — getAssistantFooterTransitionTimeline). The expansion must not
   // start until that handoff settles, or both animate the same control.
   assistantFooterThinkingMs: 420,
-  expansionMs: 300,
+  expansionMs: 180,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
-  waveformDelayMs: 100,
+  waveformDelayMs: 60,
 });
 
 // The pill's morph between the two VOICE_PILL_FOOTPRINT boxes. The cancel
