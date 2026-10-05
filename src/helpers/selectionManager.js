@@ -111,8 +111,15 @@ class SelectionManager {
     this._captureTargetPromise = null;
   }
 
-  async captureTarget() {
+  // Every hotkey press probes afresh, since focus may have moved since the last
+  // press. The renderer's refresh at recording start passes joinInFlight: a
+  // probe still running then was started by the press that began this
+  // recording, so it joins that probe instead of spawning another.
+  async captureTarget({ joinInFlight = false } = {}) {
     if (this.platform === "darwin") return;
+    if (joinInFlight && this._captureTargetPromise) {
+      return this._captureTargetPromise;
+    }
     this.lastTarget = null;
     const probe = this._probeTarget();
     this._captureTargetPromise = probe;

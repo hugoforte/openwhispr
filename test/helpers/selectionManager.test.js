@@ -532,6 +532,42 @@ test("a superseded probe never overwrites the newer probe's target", async () =>
   assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "2" });
 });
 
+function countingWin32Manager() {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "win32",
+    now: () => 1000,
+  });
+  const resolvers = [];
+  manager._probeTarget = () => new Promise((resolve) => resolvers.push(resolve));
+  return { manager, resolvers };
+}
+
+// The press that starts a recording has already spawned a probe; on Windows
+// each probe is a process, so the recording-start refresh joins it.
+test("the recording-start refresh joins the press's in-flight probe", async () => {
+  const { manager, resolvers } = countingWin32Manager();
+
+  const pressProbe = manager.captureTarget();
+  const startRefresh = manager.captureTarget({ joinInFlight: true });
+  resolvers[0]({ kind: "win-hwnd", id: "0000BEEF" });
+  await Promise.all([pressProbe, startRefresh]);
+
+  assert.equal(resolvers.length, 1);
+});
+
+// Focus may move between a start press and a quick stop press, so a press
+// never reuses the previous press's probe.
+test("a second hotkey press probes afresh while the first probe runs", async () => {
+  const { manager, resolvers } = countingWin32Manager();
+
+  manager.captureTarget();
+  manager.captureTarget();
+
+  assert.equal(resolvers.length, 2);
+});
+
 // The Windows paste path restores the window captured at record start (#859).
 // getWinTarget hands the paste that HWND exactly as --detect-only printed
 // it ("TARGET %p", hex) so the binary's base-16 --restore-window parse round-trips.

@@ -19,20 +19,19 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
 export const VOICE_PILL_CANCEL = Object.freeze({ size: 28, gap: 8 });
 
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  // A short hold that reads as an acknowledged press before the control
-  // changes shape. It was 420ms when it also had to hide the native window
-  // grow; BASE and RECORDING now share one box (windowConfig.js), so the
-  // floating pill's hold is purely the design beat.
-  thinkingMs: 260,
+  // The entrance starts at the press (resolveVoicePillListening) and the pill
+  // expands on the next frame: a hold here would only delay the moment it
+  // reads as listening.
+  thinkingMs: 0,
   // A recording that starts under the open assistant panel first hands the
   // footer from final actions back to the pill (actions retreat + pill
   // entrance — getAssistantFooterTransitionTimeline). The expansion must not
   // start until that handoff settles, or both animate the same control.
   assistantFooterThinkingMs: 420,
-  expansionMs: 300,
+  expansionMs: 180,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
-  waveformDelayMs: 100,
+  waveformDelayMs: 60,
 });
 
 // The pill's morph between the two VOICE_PILL_FOOTPRINT boxes. The cancel
@@ -184,6 +183,16 @@ export function getListeningEntranceTimeline({
     settleAtMs,
     waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };
+}
+
+/**
+ * The pill reads as listening from the press, while the microphone is still
+ * opening: the prepared capture records from its first live frame, so speech
+ * after the press is kept, and waiting for the open would hide that by about
+ * half a second. The bars rest until the first level arrives.
+ */
+export function resolveVoicePillListening({ isRecording, isPreparing, ownsActivity }) {
+  return (isRecording || isPreparing) && ownsActivity;
 }
 
 /**
