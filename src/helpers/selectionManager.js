@@ -11,10 +11,6 @@ const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
 const COPY_TIMEOUT_MS = 1200;
 const CLIPBOARD_POLL_MS = 20;
 const ATSPI_TARGET_TIMEOUT_MS = 2000;
-// A toggle press probes the target, and the renderer asks again once recording
-// starts, a few frames later. A probe started this recently is still in flight
-// for the same press, so the second call joins it instead of spawning another.
-const PROBE_JOIN_WINDOW_MS = 500;
 
 // Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
 // an empty selection (VS Code's editor.emptySelectionClipboard, Scintilla,
@@ -113,21 +109,20 @@ class SelectionManager {
     this.sessions = new Map();
     this.lastTarget = null;
     this._captureTargetPromise = null;
-    this._captureTargetStartedAt = 0;
   }
 
-  async captureTarget() {
+  // Every hotkey press probes afresh, since focus may have moved since the last
+  // press. The renderer's refresh at recording start passes joinInFlight: a
+  // probe still running then was started by the press that began this
+  // recording, so it joins that probe instead of spawning another.
+  async captureTarget({ joinInFlight = false } = {}) {
     if (this.platform === "darwin") return;
-    if (
-      this._captureTargetPromise &&
-      this.now() - this._captureTargetStartedAt < PROBE_JOIN_WINDOW_MS
-    ) {
+    if (joinInFlight && this._captureTargetPromise) {
       return this._captureTargetPromise;
     }
     this.lastTarget = null;
     const probe = this._probeTarget();
     this._captureTargetPromise = probe;
-    this._captureTargetStartedAt = this.now();
     const target = await probe;
     // A newer toggle press may have started its own probe while this one ran;
     // only the latest probe's result may land in lastTarget.

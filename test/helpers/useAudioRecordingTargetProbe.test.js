@@ -34,6 +34,7 @@ export default class FakeAudioManager {
 test("a recording starts while the paste-target probe is still running", async (t) => {
   let root = null;
   let start = null;
+  let targetProbes = 0;
   globalThis.__targetProbeStarts = 0;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -55,7 +56,10 @@ test("a recording starts while the paste-target probe is still running", async (
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
         getSttConfig: async () => ({ success: true }),
-        captureDictationTarget: () => new Promise(() => {}),
+        captureDictationTarget: () => {
+          targetProbes += 1;
+          return new Promise(() => {});
+        },
         completeDictationPreview: async () => {},
         hideDictationPreview: async () => {},
         dictationLifecycleStateChanged: () => {},
@@ -85,5 +89,8 @@ test("a recording starts while the paste-target probe is still running", async (
     await new Promise((resolve) => setTimeout(resolve, 700));
   });
 
-  assert.equal(globalThis.__targetProbeStarts, 1);
+  assert.deepEqual(
+    { targetProbes, recordingStarts: globalThis.__targetProbeStarts },
+    { targetProbes: 1, recordingStarts: 1 }
+  );
 });

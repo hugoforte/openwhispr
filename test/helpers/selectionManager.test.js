@@ -513,18 +513,16 @@ test("captureSelectedText awaits an in-flight target probe before reading lastTa
 
 test("a superseded probe never overwrites the newer probe's target", async () => {
   const clipboardManager = { runClipboardOperation: (operation) => operation() };
-  let clock = 1000;
   const manager = new SelectionManager({
     clipboardManager,
     textEditMonitor: {},
     platform: "linux",
-    now: () => clock,
+    now: () => 1000,
   });
   const resolvers = [];
   manager._getLinuxTarget = () => new Promise((resolve) => resolvers.push(resolve));
 
   const first = manager.captureTarget();
-  clock += 600;
   const second = manager.captureTarget();
   resolvers[1]({ kind: "atspi-pid", id: "2" });
   await second;
@@ -534,30 +532,40 @@ test("a superseded probe never overwrites the newer probe's target", async () =>
   assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "2" });
 });
 
-// A toggle press probes the target and the renderer asks again at recording
-// start; on Windows each probe is a process spawn, so the second joins the first.
-test("a probe requested while a fresh one runs joins it instead of spawning", async () => {
-  let clock = 1000;
+function countingWin32Manager() {
   const manager = new SelectionManager({
     clipboardManager: {},
     textEditMonitor: {},
     platform: "win32",
-    now: () => clock,
+    now: () => 1000,
   });
-  let probes = 0;
-  let resolveProbe;
-  manager._probeTarget = () => {
-    probes += 1;
-    return new Promise((resolve) => (resolveProbe = resolve));
-  };
+  const resolvers = [];
+  manager._probeTarget = () => new Promise((resolve) => resolvers.push(resolve));
+  return { manager, resolvers };
+}
+
+// The press that starts a recording has already spawned a probe; on Windows
+// each probe is a process, so the recording-start refresh joins it.
+test("the recording-start refresh joins the press's in-flight probe", async () => {
+  const { manager, resolvers } = countingWin32Manager();
 
   const pressProbe = manager.captureTarget();
-  clock += 100;
-  const startProbe = manager.captureTarget();
-  resolveProbe({ kind: "win-hwnd", id: "0000BEEF" });
-  await Promise.all([pressProbe, startProbe]);
+  const startRefresh = manager.captureTarget({ joinInFlight: true });
+  resolvers[0]({ kind: "win-hwnd", id: "0000BEEF" });
+  await Promise.all([pressProbe, startRefresh]);
 
-  assert.equal(probes, 1);
+  assert.equal(resolvers.length, 1);
+});
+
+// Focus may move between a start press and a quick stop press, so a press
+// never reuses the previous press's probe.
+test("a second hotkey press probes afresh while the first probe runs", async () => {
+  const { manager, resolvers } = countingWin32Manager();
+
+  manager.captureTarget();
+  manager.captureTarget();
+
+  assert.equal(resolvers.length, 2);
 });
 
 // The Windows paste path restores the window captured at record start (#859).

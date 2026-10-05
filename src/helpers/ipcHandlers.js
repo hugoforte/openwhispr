@@ -1542,7 +1542,7 @@ class IPCHandlers {
 
     ipcMain.handle("capture-dictation-target", async () => {
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
-      await this.selectionManager?.captureTarget?.();
+      await this.selectionManager?.captureTarget?.({ joinInFlight: true });
       return { success: true, pid };
     });
 
