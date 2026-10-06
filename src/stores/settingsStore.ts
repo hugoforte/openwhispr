@@ -2921,11 +2921,18 @@ export const selectResolvedLLMConfig = (
   const disableThinkingKey = def.storeKeys.disableThinking;
   const disableThinking = disableThinkingKey ? (state[disableThinkingKey] as boolean) : true;
 
+  const mode = state[def.storeKeys.mode] as InferenceMode;
+  // A model belongs to the route it was chosen on: a scope in another mode would
+  // send it to a server that has never heard of it. Signed-out Cloud is the
+  // exception, since it dispatches from the fallback scope's route.
+  const routeFallback =
+    fallback && (mode === fallback.mode || mode === "openwhispr") ? fallback : undefined;
+
   const localConfig: ResolvedLLMConfig = {
     scope,
-    mode: state[def.storeKeys.mode] as InferenceMode,
-    provider: read("provider") || fallback?.provider || "",
-    model: read("model") || fallback?.model || "",
+    mode,
+    provider: read("provider") || routeFallback?.provider || "",
+    model: read("model") || routeFallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
